@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - ./jenkins_home:/var/jenkins_home
+      - ./target/export-job-parameters.hpi:/usr/share/jenkins/ref/plugins/export-job-parameters.hpi
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false

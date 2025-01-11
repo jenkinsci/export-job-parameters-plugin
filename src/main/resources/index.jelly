@@ -1,0 +1,4 @@
+<?jelly escape-by-default='true'?>
+<div>
+    This plugin helps migrate jobs to Pipeline by exporting job parameters to declarative pipeline syntax. It automatically generates the parameters {} block with all configured parameters.
+</div>

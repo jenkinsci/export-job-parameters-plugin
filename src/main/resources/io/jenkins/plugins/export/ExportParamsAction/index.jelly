@@ -1,0 +1,9 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form" xmlns:l="/lib/layout" xmlns:t="/lib/hudson">
+    <l:layout title="Export Parameters">
+        <l:main-panel>
+            <h2>Exported Jenkins Job Parameters</h2>
+            <pre>${it.generateGroovyParametersBlock()}</pre>
+        </l:main-panel>
+    </l:layout>
+</j:jelly>

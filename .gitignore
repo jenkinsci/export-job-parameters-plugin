@@ -1,0 +1,49 @@
+# Maven build directory
+target/
+work/
+
+# Jenkins local development files
+jenkins_home/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse
+.settings/
+.classpath
+.project
+.factorypath
+
+# VS Code
+.vscode/
+
+# Mac OS
+.DS_Store
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+
+# Maven wrapper files (optional, if you want to include mvnw in repo)
+# .mvn/wrapper/maven-wrapper.jar
+
+# Local development files
+local.properties
+
+# Temporary files
+*~
+*.swp
+*.swo
+.*.swp
+.*.swo
+
+# Debug files
+*.debug
