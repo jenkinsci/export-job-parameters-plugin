@@ -34,11 +34,8 @@
 
   <properties>
     <jenkins.version>2.440.3</jenkins.version>
-    <java.level>11</java.level>
-    <maven.compiler.source>${java.level}</maven.compiler.source>
-    <maven.compiler.target>${java.level}</maven.compiler.target>
     <hpi.plugin.version>3.55</hpi.plugin.version>
-    <package.name>io.jenkins.plugins.export</package.name>
+    <package.name>io.jenkins.plugins.exportjobparameters</package.name>
   </properties>
 
   <dependencyManagement>
@@ -54,11 +51,6 @@
   </dependencyManagement>
 
   <dependencies>
-    <dependency>
-      <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>structs</artifactId>
-      <version>338.v848422169819</version>
-    </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-basic-steps</artifactId>
@@ -84,10 +76,9 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>script-security</artifactId>
-      <version>1341.va_2819b_414686</version>
-      <scope>compile</scope>
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-step-api</artifactId>
+      <version>639.v6eca_cd8c04a_a_</version>
     </dependency>
   </dependencies>
 

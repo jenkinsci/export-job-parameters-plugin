@@ -1,4 +1,4 @@
-package io.jenkins.plugins.export;
+package io.jenkins.plugins.exportjobparameters;
 
 import hudson.Extension;
 import hudson.model.Action;

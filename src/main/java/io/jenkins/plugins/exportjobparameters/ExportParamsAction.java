@@ -1,11 +1,10 @@
-package io.jenkins.plugins.export;
+package io.jenkins.plugins.exportjobparameters;
 
 import hudson.model.*;
 import hudson.model.ParameterDefinition;
 import hudson.model.ParametersDefinitionProperty;
 import jenkins.model.Jenkins;
 import org.jenkinsci.Symbol;
-import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -75,7 +74,7 @@ public class ExportParamsAction implements Action {
         if (params == null || params.getParameterDefinitions().isEmpty()) {
             return null;
         }
-        return Jenkins.get().hasPermission(Job.CONFIGURE) ? "clipboard.png" : null;
+        return job.hasPermission(Job.CONFIGURE) ? "symbol-logs" : null;
     }
 
     @Override
@@ -85,6 +84,10 @@ public class ExportParamsAction implements Action {
 
     @Override
     public String getUrlName() {
+        ParametersDefinitionProperty params = job.getProperty(ParametersDefinitionProperty.class);
+        if (params == null || params.getParameterDefinitions().isEmpty() || !job.hasPermission(Job.CONFIGURE)) {
+            return null;
+        }
         return "export-parameters";
     }
 
