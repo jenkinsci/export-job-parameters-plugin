@@ -1,0 +1,141 @@
+# Project Background
+This is a Jenkins plugin called the **Export Job Parameters Plugin**. It is designed to export job parameters into a Groovy block compatible with Jenkins pipelines. The plugin facilitates migration, replication, and modification of job configurations by generating a `parameters` block that can be inserted directly into a Jenkinsfile.
+
+# Purpose
+1. Simplify migration of job configurations to Jenkins pipelines.
+2. Enhance reusability of `parameters` blocks in Jenkinsfiles.
+3. Support extensibility for new parameter types.
+4. Ensure compatibility with both declarative and scripted pipeline syntax.
+
+# Coding Standards
+- Use Java for plugin development.
+- Follow Jenkins plugin development best practices.
+- Use descriptive variable and method names.
+- Ensure proper error handling and logging.
+- Write clean, modular, and maintainable code.
+- Use reflection for dynamic property extraction.
+- Properly escape Groovy syntax to avoid runtime errors.
+
+# Preferred Libraries and Tools
+- Jenkins Core API for plugin development.
+- Groovy for pipeline syntax generation.
+- Java Reflection API for dynamic property extraction.
+- JUnit for unit testing.
+- Maven for build and dependency management.
+
+# File Structure
+- `src/main/java/com/example/exportparams/`: Core plugin logic.
+  - `ExportParamsAction.java`: Main class for generating Groovy blocks.
+  - `formatters/`: Directory for parameter formatters.
+    - `StringParameterFormatter.java`: Formatter for string parameters.
+    - `BooleanParameterFormatter.java`: Formatter for boolean parameters.
+    - `CustomParameterFormatter.java`: Example formatter for custom parameters.
+- `src/test/java/com/example/exportparams/`: Unit tests.
+  - `ExportParamsActionTest.java`: Tests for the main class.
+  - `formatters/`: Tests for parameter formatters.
+- `README.md`: Plugin documentation.
+- `pom.xml`: Maven build configuration.
+
+# Key Components
+1. **`ExportParamsAction` Class**:
+   - Core logic for generating Groovy blocks.
+   - Handles UI integration and parameter extraction.
+
+2. **Parameter Formatters**:
+   - Each parameter type has a dedicated formatter.
+   - Formatters generate Groovy code for declarative or scripted syntax.
+
+3. **Reflection-Based Property Extraction**:
+   - Dynamically extracts parameter properties using reflection.
+   - Excludes irrelevant properties using an `EXCLUDED_PROPERTIES` list.
+
+4. **Groovy Syntax Escaping**:
+   - Ensures special characters in parameter names, descriptions, and values are properly escaped.
+
+# Workflow
+1. **UI Integration**:
+   - Add an "Export Job Parameters" button to job configuration pages.
+   - Display the button only if the job has parameters and the user has permissions.
+
+2. **Parameter Extraction**:
+   - Retrieve `ParametersDefinitionProperty` from the job.
+   - Iterate over parameter definitions and extract properties using reflection.
+
+3. **Formatter Selection**:
+   - Use declarative syntax if a formatter is available.
+   - Fall back to scripted syntax for unsupported parameters.
+
+4. **Groovy Block Generation**:
+   - Construct the `parameters` block in Groovy syntax.
+   - Return the generated block as a string for use in Jenkinsfiles.
+
+# Extending the Plugin
+1. **Adding a New Parameter Type**:
+   - Register a new formatter using the `registerFormatter` method.
+   - Example:
+     ```java
+     registerFormatter(CustomParameterDefinition.class, (param, props) ->
+         String.format("customParam(name: '%s', customAttribute: '%s', description: '%s')",
+             escapeGroovy(props.get("name")),
+             escapeGroovy(props.get("customAttribute")),
+             escapeGroovy(props.get("description")))
+     );
+     ```
+   - Test the formatter with various configurations.
+
+2. **Maintaining the Plugin**:
+   - Periodically update the `EXCLUDED_PROPERTIES` list.
+   - Improve error handling and logging.
+   - Optimize performance by caching frequently used symbols and properties.
+   - Document changes and supported parameter types.
+
+# Documentation Standards
+- Use Javadoc for all public methods and classes.
+- Include a `README.md` with:
+  - Plugin overview and purpose.
+  - Installation instructions.
+  - Usage examples.
+  - Guidelines for extending the plugin.
+- Maintain a changelog for version updates.
+
+# Testing Requirements
+- Write unit tests for all core classes and formatters.
+- Achieve at least 80% test coverage.
+- Use JUnit for testing.
+- Include integration tests for Jenkins pipeline compatibility.
+
+# Error Handling
+- Use `try/catch` blocks for reflection and formatter processing.
+- Log meaningful error messages for debugging.
+- Implement fallback mechanisms for unsupported parameter types.
+
+# Performance Optimization
+- Cache frequently used symbols and properties.
+- Minimize reflection overhead by reusing extracted properties.
+- Optimize Groovy block generation for large parameter sets.
+
+# Notes for Developers
+- Use reflection carefully and test with a variety of parameter configurations.
+- Prefer declarative syntax but ensure fallback to scripted syntax for compatibility.
+- Properly escape Groovy strings to avoid runtime errors.
+- Extend the plugin in a backward-compatible manner.
+
+---
+
+### Example Usage in Jenkinsfile
+```groovy
+pipeline {
+    agent any
+    parameters {
+        string(name: 'MY_STRING_PARAM', defaultValue: 'default', description: 'A string parameter')
+        booleanParam(name: 'MY_BOOLEAN_PARAM', defaultValue: true, description: 'A boolean parameter')
+    }
+    stages {
+        stage('Example') {
+            steps {
+                echo "String parameter: ${params.MY_STRING_PARAM}"
+                echo "Boolean parameter: ${params.MY_BOOLEAN_PARAM}"
+            }
+        }
+    }
+}
