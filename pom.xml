@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>4.85</version>
+    <version>4.88</version>
     <relativePath />
   </parent>
 
@@ -33,8 +33,8 @@
   </scm>
 
   <properties>
-    <jenkins.version>2.440.3</jenkins.version>
-    <hpi.plugin.version>3.55</hpi.plugin.version>
+    <jenkins.baseline>2.479</jenkins.baseline>
+    <jenkins.version>${jenkins.baseline}.3</jenkins.version>
     <package.name>io.jenkins.plugins.exportjobparameters</package.name>
   </properties>
 
@@ -42,8 +42,8 @@
     <dependencies>
       <dependency>
         <groupId>io.jenkins.tools.bom</groupId>
-        <artifactId>bom-2.440.x</artifactId>
-        <version>3193.v330d8248d39e</version>
+        <artifactId>bom-${jenkins.baseline}.x</artifactId>
+        <version>4570.v1b_c718dd3b_1e</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -54,31 +54,26 @@
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-basic-steps</artifactId>
-      <version>2.24</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-cps</artifactId>
-      <version>2.92</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-durable-task-step</artifactId>
-      <version>2.39</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-job</artifactId>
-      <version>2.41</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-step-api</artifactId>
-      <version>639.v6eca_cd8c04a_a_</version>
     </dependency>
   </dependencies>
 
@@ -86,10 +81,6 @@
     <repository>
       <id>repo.jenkins-ci.org</id>
       <url>https://repo.jenkins-ci.org/public/</url>
-    </repository>
-    <repository>
-      <id>central</id>
-      <url>https://repo.maven.apache.org/maven2</url>
     </repository>
   </repositories>
 
