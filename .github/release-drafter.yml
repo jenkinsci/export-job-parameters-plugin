@@ -1,2 +1,4 @@
 _extends: .github
+name-template: $NEXT_PATCH_VERSION
 tag-template: export-job-parameters-$NEXT_MINOR_VERSION
+version-template: $MAJOR.$MINOR.$PATCH
