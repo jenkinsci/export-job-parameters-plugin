@@ -224,7 +224,7 @@ public class ExportParamsAction implements Action {
                             properties.put(propertyName, value);
                         }
                     }
-                } catch (Exception e) {
+                } catch (java.lang.reflect.InvocationTargetException | java.lang.IllegalAccessException | java.lang.IllegalArgumentException e) {
                     // Skip properties that can't be accessed
                     continue;
                 }
