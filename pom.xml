@@ -49,6 +49,17 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- Override Bouncy Castle dependencies to fix version issues -->
+      <dependency>
+        <groupId>org.bouncycastle</groupId>
+        <artifactId>bcprov-jdk18on</artifactId>
+        <version>1.81</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bouncycastle</groupId>
+        <artifactId>bcutil-jdk18on</artifactId>
+        <version>1.81</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
