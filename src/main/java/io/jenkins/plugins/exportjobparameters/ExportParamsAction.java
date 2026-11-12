@@ -1,80 +1,48 @@
 package io.jenkins.plugins.exportjobparameters;
 
-import hudson.model.*;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.Extension;
+import hudson.model.Action;
+import hudson.model.Item;
+import hudson.model.Job;
 import hudson.model.ParameterDefinition;
 import hudson.model.ParametersDefinitionProperty;
-import jenkins.model.Jenkins;
-import org.jenkinsci.Symbol;
-import java.lang.reflect.Method;
-import java.util.*;
-import java.util.stream.Collectors;
+import hudson.security.Permission;
+import hudson.util.Secret;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import jenkins.model.TransientActionFactory;
+import org.jenkinsci.plugins.structs.describable.DescribableModel;
+import org.jenkinsci.plugins.structs.describable.UninstantiatedDescribable;
+import org.jenkinsci.plugins.workflow.cps.Snippetizer;
 
+/**
+ * Renders the parameters of a job as Pipeline code.
+ */
 public class ExportParamsAction implements Action {
+    private static final Logger LOGGER = Logger.getLogger(ExportParamsAction.class.getName());
+
     private final Job<?, ?> job;
-    private static final Map<Class<?>, ParameterFormatter> FORMATTERS = new HashMap<>();
-    private static final Set<String> EXCLUDED_PROPERTIES = new HashSet<>(Arrays.asList(
-        "class",              // Java internal
-        "descriptor",         // Jenkins internal
-        "type",              // Redundant with class name
-        "formattedDescription", // Derived from description
-        "defaultParameterValue", // Internal representation
-        "defaultValueAsSecret"  // Internal state
-    ));
-
-    // Initialize the formatters map with known parameter types
-    static {
-        registerFormatter(StringParameterDefinition.class, (param, props) ->
-                String.format("string(name: '%s', defaultValue: '%s', description: '%s')",
-                        escapeGroovy(props.get("name")),
-                        escapeGroovy(props.get("defaultValue")),
-                        escapeGroovy(props.get("description")))
-        );
-
-        registerFormatter(BooleanParameterDefinition.class, (param, props) ->
-                String.format("booleanParam(name: '%s', defaultValue: %s, description: '%s')",
-                        escapeGroovy(props.get("name")),
-                        props.get("defaultValue"),
-                        escapeGroovy(props.get("description")))
-        );
-
-        registerFormatter(ChoiceParameterDefinition.class, (param, props) -> {
-            List<String> choices = (List<String>) props.get("choices");
-            String choicesStr = choices.stream()
-                    .map(ExportParamsAction::escapeGroovy)
-                    .collect(Collectors.joining("', '"));
-            return String.format("choice(name: '%s', choices: ['%s'], description: '%s')",
-                    escapeGroovy(props.get("name")),
-                    choicesStr,
-                    escapeGroovy(props.get("description")));
-        });
-
-        // Add support for Active Choices Parameter if available
-        try {
-            Class<?> cascadeChoiceClass = Class.forName("org.biouno.unochoice.CascadeChoiceParameter");
-            registerFormatter(cascadeChoiceClass, (param, props) ->
-                    String.format("activeChoice(name: '%s', script: '''%s''', description: '%s', choiceType: '%s')",
-                            escapeGroovy(props.get("name")),
-                            escapeGroovy(props.get("script").toString()),
-                            escapeGroovy(props.get("description")),
-                            props.get("choiceType"))
-            );
-        } catch (ClassNotFoundException e) {
-            // Active Choices plugin not installed - ignore
-        }
-    }
 
     public ExportParamsAction(Job<?, ?> job) {
         this.job = job;
     }
 
+    public Job<?, ?> getJob() {
+        return job;
+    }
+
+    public Permission getPermission() {
+        return Item.EXTENDED_READ;
+    }
+
     @Override
     public String getIconFileName() {
-        // Only show the action if the job has parameters and user has permission
-        ParametersDefinitionProperty params = job.getProperty(ParametersDefinitionProperty.class);
-        if (params == null || params.getParameterDefinitions().isEmpty()) {
-            return null;
-        }
-        return job.hasPermission(Job.CONFIGURE) ? "symbol-logs" : null;
+        return job.hasPermission(getPermission()) ? "symbol-parameters" : null;
     }
 
     @Override
@@ -84,216 +52,81 @@ public class ExportParamsAction implements Action {
 
     @Override
     public String getUrlName() {
-        ParametersDefinitionProperty params = job.getProperty(ParametersDefinitionProperty.class);
-        if (params == null || params.getParameterDefinitions().isEmpty() || !job.hasPermission(Job.CONFIGURE)) {
-            return null;
-        }
         return "export-parameters";
     }
 
-    // Entrypoint
-    public String generateGroovyParametersBlock() {
-        ParametersDefinitionProperty paramsDefProperty = job.getProperty(ParametersDefinitionProperty.class);
-        if (paramsDefProperty == null) {
-            return "parameters {\n}\n";
-        }
-
-        List<ParameterDefinition> paramDefs = paramsDefProperty.getParameterDefinitions();
-        boolean allHaveDeclarativeNames = true;
-        
-        // First pass - check if all params have declarative names
-        for (ParameterDefinition paramDef : paramDefs) {
-            if (getDeclarativeName(paramDef) == null) {
-                allHaveDeclarativeNames = false;
-                break;
-            }
-        }
-
-        StringBuilder block = new StringBuilder();
-        if (allHaveDeclarativeNames) {
-            // Use parameters {} syntax
-            block.append("parameters {\n");
-        } else {
-            // Use properties([parameters([])]) syntax
-            block.append("properties([\n    parameters([\n");
-        }
-
-        for (ParameterDefinition paramDef : paramDefs) {
-            String parameterBlock = generateParameterBlock(paramDef, !allHaveDeclarativeNames);
-            if (parameterBlock != null) {
-                block.append(allHaveDeclarativeNames ? "    " : "        ")
-                     .append(parameterBlock)
-                     .append(allHaveDeclarativeNames ? "\n" : ",\n");
-            }
-        }
-
-        if (allHaveDeclarativeNames) {
-            block.append("}\n");
-        } else {
-            block.append("    ])\n])\n");
-        }
-        
-        return block.toString();
-    }
-
-    // Process param definition
-    private String generateParameterBlock(ParameterDefinition paramDef, boolean useClassSyntax) {
-        try {
-            Map<String, Object> properties = extractProperties(paramDef);
-            
-            if (!useClassSyntax) {
-                ParameterFormatter formatter = FORMATTERS.get(paramDef.getClass());
-                if (formatter != null) {
-                    return formatter.format(paramDef, properties);
-                }
-            }
-            
-            String declarativeName = getDeclarativeName(paramDef);
-            if (declarativeName != null && !useClassSyntax) {
-                return generateDeclarativeParameterBlock(paramDef, properties, declarativeName);
-            } else {
-                // Fall back to class-based syntax
-                return generateClassBasedParameterBlock(paramDef, properties);
-            }
-        } catch (Exception e) {
-            System.err.println("Error generating parameter block for " + paramDef.getName() + ": " + e.getMessage());
+    /**
+     * @return the {@code parameters} directive of a Declarative Pipeline, or null if one of the
+     *     parameters has no symbol and so cannot be used in a Declarative Pipeline
+     */
+    @CheckForNull
+    public String getDeclarativeBlock() {
+        List<String> snippets = snippets();
+        if (snippets.stream().anyMatch(s -> s.startsWith("["))) {
             return null;
         }
+        return "parameters {\n    " + String.join("\n    ", snippets) + "\n}";
     }
 
-    private String generateDeclarativeParameterBlock(ParameterDefinition paramDef, Map<String, Object> properties, String declarativeName) {
-        StringBuilder paramBlock = new StringBuilder();
-        paramBlock.append(declarativeName).append("(");
-        appendProperties(paramBlock, properties);
-        paramBlock.append(")");
-        return paramBlock.toString();
+    /**
+     * @return the {@code properties} step of a Scripted Pipeline
+     */
+    @NonNull
+    public String getScriptedBlock() {
+        return "properties([\n    parameters([\n        " + String.join(",\n        ", snippets()) + "\n    ])\n])";
     }
 
-    private String generateClassBasedParameterBlock(ParameterDefinition paramDef, Map<String, Object> properties) {
-        StringBuilder paramBlock = new StringBuilder();
-        paramBlock.append("[$class: '").append(paramDef.getClass().getSimpleName()).append("'");
-        
-        if (!properties.isEmpty()) {
-            paramBlock.append(", ");
-            appendProperties(paramBlock, properties);
+    private List<String> snippets() {
+        List<String> snippets = new ArrayList<>();
+        ParametersDefinitionProperty property = job.getProperty(ParametersDefinitionProperty.class);
+        if (property == null) {
+            return snippets;
         }
-        
-        paramBlock.append("]");
-        return paramBlock.toString();
-    }
-
-    private void appendProperties(StringBuilder paramBlock, Map<String, Object> properties) {
-        boolean first = true;
-        for (Map.Entry<String, Object> entry : properties.entrySet()) {
-            if (!first) {
-                paramBlock.append(", ");
-            }
-            first = false;
-            
-            paramBlock.append(entry.getKey()).append(": ");
-            Object value = entry.getValue();
-            if (value instanceof String) {
-                paramBlock.append("'").append(escapeGroovy((String)value)).append("'");
-            } else if (value instanceof List) {
-                paramBlock.append(formatList((List<?>) value));
-            } else {
-                paramBlock.append(value);
-            }
-        }
-    }
-
-    private Map<String, Object> extractProperties(ParameterDefinition paramDef) {
-        Map<String, Object> properties = new LinkedHashMap<>();
-        Method[] methods = paramDef.getClass().getMethods();
-
-        // Add common properties first
-        properties.put("name", paramDef.getName());
-        if (paramDef.getDescription() != null) {
-            properties.put("description", paramDef.getDescription());
-        }
-
-        // Extract properties from getter methods, excluding known irrelevant ones
-        for (Method method : methods) {
-            if (isGetter(method)) {
-                try {
-                    String propertyName = getPropertyNameFromGetter(method.getName());
-                    if (!EXCLUDED_PROPERTIES.contains(propertyName)) {
-                        Object value = method.invoke(paramDef);
-                        // Only include non-null values and exclude internal Jenkins objects
-                        if (value != null && !isInternalJenkinsObject(value)) {
-                            properties.put(propertyName, value);
-                        }
-                    }
-                } catch (java.lang.reflect.InvocationTargetException | java.lang.IllegalAccessException | java.lang.IllegalArgumentException e) {
-                    // Skip properties that can't be accessed
-                    continue;
+        for (ParameterDefinition definition : property.getParameterDefinitions()) {
+            try {
+                UninstantiatedDescribable ud = DescribableModel.uninstantiate2_(definition);
+                if (ud.getSymbol() == null) {
+                    ud.setKlass(definition.getClass().getSimpleName());
                 }
-            }
-        }
-
-        return properties;
-    }
-
-    private String getDeclarativeName(ParameterDefinition paramDef) {
-        Descriptor descriptor = paramDef.getDescriptor();
-        if (descriptor != null) {
-            // Check if @Symbol exists
-            Symbol symbolAnnotation = descriptor.getClass().getAnnotation(Symbol.class);
-            if (symbolAnnotation != null) {
-                String[] symbols = symbolAnnotation.value();
-                if (symbols.length > 0) {
-                    return symbols[0];
+                // Pipeline cannot set a secret from a string literal, and a secret does not belong in a Jenkinsfile
+                Collection<?> values = ud.getArguments().values();
+                if (values.stream()
+                        .anyMatch(v ->
+                                v instanceof Secret s && !Secret.toString(s).isEmpty())) {
+                    snippets.add(
+                            "// The default value of " + definition.getName() + " is a secret and is not exported");
                 }
+                values.removeIf(Secret.class::isInstance);
+                snippets.add(Snippetizer.object2Groovy(ud, true));
+            } catch (RuntimeException e) {
+                LOGGER.log(
+                        Level.WARNING,
+                        e,
+                        () -> "Cannot export parameter " + definition.getName() + " of " + job.getFullName());
+                snippets.add("// " + definition.getName() + " cannot be exported: "
+                        + definition.getClass().getName() + " is not supported in Pipeline");
             }
         }
-        return null;
+        return snippets;
     }
 
-    private static boolean isGetter(Method method) {
-        return (method.getName().startsWith("get") || method.getName().startsWith("is")) &&
-                method.getParameterCount() == 0 &&
-                !method.getReturnType().equals(void.class) &&
-                !method.getName().equals("getClass");
-    }
+    @Extension
+    public static class Factory extends TransientActionFactory<Job> {
 
-    private static String getPropertyNameFromGetter(String methodName) {
-        if (methodName.startsWith("get")) {
-            return Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
-        } else if (methodName.startsWith("is")) {
-            return Character.toLowerCase(methodName.charAt(2)) + methodName.substring(3);
+        @Override
+        public Class<Job> type() {
+            return Job.class;
         }
-        return methodName;
-    }
 
-    private boolean isInternalJenkinsObject(Object value) {
-        String className = value.getClass().getName();
-        return className.startsWith("hudson.") || 
-               className.startsWith("jenkins.") || 
-               className.startsWith("org.jenkinsci.");
-    }
-
-    private static String escapeGroovy(Object value) {
-        if (value == null) return "";
-        return value.toString()
-                .replace("\\", "\\\\")
-                .replace("'", "\\'")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
-    private static String formatList(List<?> list) {
-        return "[" + list.stream()
-                .map(item -> item instanceof String ? "'" + escapeGroovy((String)item) + "'" : item.toString())
-                .collect(Collectors.joining(", ")) + "]";
-    }
-
-    public static void registerFormatter(Class<?> parameterClass, ParameterFormatter formatter) {
-        FORMATTERS.put(parameterClass, formatter);
-    }
-
-    @FunctionalInterface
-    public interface ParameterFormatter {
-        String format(ParameterDefinition parameter, Map<String, Object> properties);
+        @NonNull
+        @Override
+        public Collection<? extends Action> createFor(@NonNull Job target) {
+            Job<?, ?> job = target;
+            ParametersDefinitionProperty property = job.getProperty(ParametersDefinitionProperty.class);
+            if (property == null || property.getParameterDefinitions().isEmpty()) {
+                return List.of();
+            }
+            return List.of(new ExportParamsAction(job));
+        }
     }
 }

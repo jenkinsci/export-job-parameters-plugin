@@ -1,9 +1,32 @@
 <?jelly escape-by-default='true'?>
-<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form" xmlns:l="/lib/layout" xmlns:t="/lib/hudson">
-    <l:layout title="Export Parameters">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
+    <l:layout title="${it.displayName}" permission="${it.permission}">
+        <st:include page="sidepanel.jelly" it="${it.job}"/>
         <l:main-panel>
-            <h2>Exported Jenkins Job Parameters</h2>
-            <pre>${it.generateGroovyParametersBlock()}</pre>
+            <l:app-bar title="${it.displayName}"/>
+            <j:set var="declarative" value="${it.declarativeBlock}"/>
+            <j:set var="scripted" value="${it.scriptedBlock}"/>
+
+            <h2>${%Declarative Pipeline}</h2>
+            <j:choose>
+                <j:when test="${declarative != null}">
+                    <p>${%declarative.help}</p>
+                    <div class="jenkins-!-margin-bottom-2">
+                        <l:copyButton text="${declarative}" label="${%Copy}"/>
+                    </div>
+                    <pre id="export-parameters-declarative">${declarative}</pre>
+                </j:when>
+                <j:otherwise>
+                    <p>${%declarative.unavailable}</p>
+                </j:otherwise>
+            </j:choose>
+
+            <h2>${%Scripted Pipeline}</h2>
+            <p>${%scripted.help}</p>
+            <div class="jenkins-!-margin-bottom-2">
+                <l:copyButton text="${scripted}" label="${%Copy}"/>
+            </div>
+            <pre id="export-parameters-scripted">${scripted}</pre>
         </l:main-panel>
     </l:layout>
 </j:jelly>
