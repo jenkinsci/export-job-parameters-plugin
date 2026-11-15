@@ -86,6 +86,33 @@ class ExportParamsActionTest {
     }
 
     @Test
+    void longParameterIsWrittenWithOneArgumentPerLine() throws Exception {
+        String description = "A description that is long enough to push the parameter over the maximum line length";
+        FreeStyleProject job = job(new StringParameterDefinition("DEPLOY_ENV", "staging", description, true));
+
+        assertEquals("""
+                parameters {
+                    string(
+                        defaultValue: 'staging',
+                        description: '%s',
+                        name: 'DEPLOY_ENV',
+                        trim: true
+                    )
+                }""".formatted(description), action(job).getDeclarativeBlock());
+        assertEquals("""
+                properties([
+                    parameters([
+                        string(
+                            defaultValue: 'staging',
+                            description: '%s',
+                            name: 'DEPLOY_ENV',
+                            trim: true
+                        )
+                    ])
+                ])""".formatted(description), action(job).getScriptedBlock());
+    }
+
+    @Test
     void declarativeBlockRecreatesTheParameters() throws Exception {
         FreeStyleProject original = job(roundTripParameters());
 
@@ -112,19 +139,44 @@ class ExportParamsActionTest {
 
     @Test
     void parameterWithoutSymbolIsOnlyExportedAsScripted() throws Exception {
-        FreeStyleProject job = job(new StringParameterDefinition("A", "a"), new NoSymbolParameterDefinition("B"));
+        FreeStyleProject job =
+                job(new StringParameterDefinition("A", "a"), new NoSymbolParameterDefinition("B", "PT_TAG"));
 
         assertNull(action(job).getDeclarativeBlock());
         assertEquals("""
                 properties([
                     parameters([
                         string(defaultValue: 'a', name: 'A'),
-                        [$class: 'NoSymbolParameterDefinition', name: 'B']
+                        [$class: 'NoSymbolParameterDefinition', name: 'B', type: 'PT_TAG']
                     ])
                 ])""", action(job).getScriptedBlock());
         assertThat(
                 j.createWebClient().getPage(job, "export-parameters").asNormalizedText(),
                 containsString("has no Pipeline symbol"));
+
+        WorkflowJob pipeline = j.createProject(WorkflowJob.class, "scripted");
+        pipeline.setDefinition(new CpsFlowDefinition(action(job).getScriptedBlock() + "\necho 'ok'", true));
+        j.buildAndAssertSuccess(pipeline);
+
+        assertEquals(action(job).getScriptedBlock(), action(pipeline).getScriptedBlock());
+        ParameterDefinition recreated =
+                pipeline.getProperty(ParametersDefinitionProperty.class).getParameterDefinition("B");
+        assertEquals("PT_TAG", ((NoSymbolParameterDefinition) recreated).type);
+    }
+
+    @Test
+    void classNameIsQualifiedWhenTwoParameterTypesShareIt() throws Exception {
+        FreeStyleProject job = job(new Other.PasswordParameterDefinition("B"));
+
+        assertThat(
+                action(job).getScriptedBlock(),
+                containsString("[$class: '" + Other.PasswordParameterDefinition.class.getName() + "', name: 'B']"));
+
+        WorkflowJob pipeline = j.createProject(WorkflowJob.class, "scripted");
+        pipeline.setDefinition(new CpsFlowDefinition(action(job).getScriptedBlock() + "\necho 'ok'", true));
+        j.buildAndAssertSuccess(pipeline);
+
+        assertEquals(action(job).getScriptedBlock(), action(pipeline).getScriptedBlock());
     }
 
     @Test
@@ -248,11 +300,15 @@ class ExportParamsActionTest {
         return action;
     }
 
+    /** Like Git Parameter, has a {@code type} that is hidden by {@link ParameterDefinition#getType()}. */
     public static class NoSymbolParameterDefinition extends ParameterDefinition {
 
+        private final String type;
+
         @DataBoundConstructor
-        public NoSymbolParameterDefinition(String name) {
+        public NoSymbolParameterDefinition(String name, String type) {
             super(name);
+            this.type = type;
         }
 
         @Override
@@ -267,6 +323,30 @@ class ExportParamsActionTest {
 
         @TestExtension
         public static class DescriptorImpl extends ParameterDescriptor {}
+    }
+
+    public static class Other {
+        /** Has the same simple name as the password parameter of core. */
+        public static class PasswordParameterDefinition extends ParameterDefinition {
+
+            @DataBoundConstructor
+            public PasswordParameterDefinition(String name) {
+                super(name);
+            }
+
+            @Override
+            public ParameterValue createValue(StaplerRequest2 req, JSONObject jo) {
+                return null;
+            }
+
+            @Override
+            public ParameterValue createValue(StaplerRequest2 req) {
+                return null;
+            }
+
+            @TestExtension
+            public static class DescriptorImpl extends ParameterDescriptor {}
+        }
     }
 
     public static class UnsupportedParameterDefinition extends ParameterDefinition {
