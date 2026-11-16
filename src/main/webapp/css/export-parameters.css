@@ -14,3 +14,20 @@
   border-radius: 10px;
   background: var(--background);
 }
+
+.export-parameters-string {
+  color: color-mix(in srgb, var(--green) 60%, var(--text-color));
+}
+
+.export-parameters-comment {
+  color: color-mix(in srgb, var(--text-color-secondary) 70%, var(--text-color));
+  font-style: italic;
+}
+
+.export-parameters-literal {
+  color: color-mix(in srgb, var(--orange) 70%, var(--text-color));
+}
+
+.export-parameters-call {
+  color: color-mix(in srgb, var(--blue) 75%, var(--text-color));
+}

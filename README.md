@@ -6,13 +6,15 @@ Exports the parameters of a job as Pipeline code, so you can move a job that was
 
 Every job that has parameters gets an **Export Job Parameters** link in its side panel. The page shows the parameters in both Pipeline flavors, each with a copy button.
 
+![The Export Job Parameters page](docs/images/export-page.png)
+
 The link is shown to users who can read the job configuration (`Job/Configure` or `Job/ExtendedRead`).
 
 For a job with a string, a choice and a boolean parameter you get a `parameters` directive for a Declarative Pipeline:
 
 ```groovy
 parameters {
-    string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Environment to deploy to')
+    string(name: 'DEPLOY_ENV', defaultValue: 'staging', description: 'Where to deploy')
     choice(name: 'REGION', choices: ['us-east-1', 'eu-west-1'], description: 'AWS region')
     booleanParam(name: 'DEBUG', defaultValue: true)
 }
@@ -23,11 +25,20 @@ and a `properties` step for a Scripted Pipeline:
 ```groovy
 properties([
     parameters([
-        string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Environment to deploy to'),
+        string(name: 'DEPLOY_ENV', defaultValue: 'staging', description: 'Where to deploy'),
         choice(name: 'REGION', choices: ['us-east-1', 'eu-west-1'], description: 'AWS region'),
         booleanParam(name: 'DEBUG', defaultValue: true)
     ])
 ])
+```
+
+### From a script
+
+Both forms are also served as plain text, which helps when you have many jobs to move:
+
+```sh
+curl -u user:token https://jenkins.example.com/job/my-job/export-parameters/declarative
+curl -u user:token https://jenkins.example.com/job/my-job/export-parameters/scripted
 ```
 
 ## Supported parameters

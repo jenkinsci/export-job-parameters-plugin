@@ -2,6 +2,7 @@ package io.jenkins.plugins.exportjobparameters;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,6 +27,8 @@ import net.sf.json.JSONObject;
 import org.biouno.unochoice.CascadeChoiceParameter;
 import org.biouno.unochoice.ChoiceParameter;
 import org.biouno.unochoice.model.GroovyScript;
+import org.htmlunit.Page;
+import org.htmlunit.html.DomElement;
 import org.htmlunit.html.HtmlPage;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
@@ -55,7 +58,7 @@ class ExportParamsActionTest {
     @Test
     void builtInParameters() throws Exception {
         FreeStyleProject job = job(
-                new StringParameterDefinition("DEPLOY_ENV", "staging", "Environment to deploy to", true),
+                new StringParameterDefinition("DEPLOY_ENV", "staging", "Target", true),
                 new ChoiceParameterDefinition("REGION", new String[] {"us-east-1", "eu-west-1"}, "AWS region"),
                 new BooleanParameterDefinition("DEBUG", true, null),
                 new TextParameterDefinition("NOTES", "line1\nline2", "Release notes"),
@@ -63,7 +66,7 @@ class ExportParamsActionTest {
 
         assertEquals("""
                 parameters {
-                    string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Environment to deploy to')
+                    string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Target')
                     choice(name: 'REGION', choices: ['us-east-1', 'eu-west-1'], description: 'AWS region')
                     booleanParam(name: 'DEBUG', defaultValue: true)
                     text(
@@ -78,7 +81,7 @@ class ExportParamsActionTest {
         assertEquals("""
                 properties([
                     parameters([
-                        string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Environment to deploy to'),
+                        string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Target'),
                         choice(name: 'REGION', choices: ['us-east-1', 'eu-west-1'], description: 'AWS region'),
                         booleanParam(name: 'DEBUG', defaultValue: true),
                         text(
@@ -226,6 +229,48 @@ class ExportParamsActionTest {
     }
 
     @Test
+    void pageHighlightsTheCodeWithoutChangingIt() throws Exception {
+        FreeStyleProject job = job(
+                new StringParameterDefinition("URL", "https://example.com//path", "it's // not a comment"),
+                new TextParameterDefinition("TEXT", MULTILINE, TRICKY),
+                new BooleanParameterDefinition("FLAG", true, null),
+                new PasswordParameterDefinition("TOKEN", Secret.fromString("s3cr3t"), null));
+
+        HtmlPage page = j.createWebClient().getPage(job, "export-parameters");
+        DomElement block = page.getElementById("export-parameters-declarative");
+
+        assertEquals(action(job).getDeclarativeBlock(), block.getTextContent());
+        assertEquals(
+                List.of("'https://example.com//path'", "\"it's // not a comment\""),
+                texts(block, "export-parameters-string").subList(1, 3));
+        assertEquals(
+                List.of("// The default value of TOKEN is a secret and is not exported"),
+                texts(block, "export-parameters-comment"));
+        assertEquals(List.of("true"), texts(block, "export-parameters-literal"));
+        assertThat(texts(block, "export-parameters-string"), hasItem(GroovyFormatter.quote(MULTILINE)));
+        assertEquals(
+                List.of("parameters", "string", "text", "booleanParam", "password"),
+                texts(block, "export-parameters-call"));
+    }
+
+    @Test
+    void blocksAreServedAsPlainText() throws Exception {
+        FreeStyleProject job = job(new StringParameterDefinition("NAME", "value"));
+        JenkinsRule.WebClient client = j.createWebClient();
+
+        Page declarative = client.goTo(job.getUrl() + "export-parameters/declarative", "text/plain");
+        assertEquals(
+                action(job).getDeclarativeBlock() + "\n",
+                declarative.getWebResponse().getContentAsString());
+        Page scripted = client.goTo(job.getUrl() + "export-parameters/scripted", "text/plain");
+        assertEquals(
+                action(job).getScriptedBlock() + "\n", scripted.getWebResponse().getContentAsString());
+
+        FreeStyleProject scriptedOnly = job(new NoSymbolParameterDefinition("B", "x"));
+        client.assertFails(scriptedOnly.getUrl() + "export-parameters/declarative", HttpURLConnection.HTTP_NOT_FOUND);
+    }
+
+    @Test
     void jobWithoutParametersHasNoAction() throws Exception {
         assertNull(j.createFreeStyleProject().getAction(ExportParamsAction.class));
     }
@@ -244,6 +289,8 @@ class ExportParamsActionTest {
 
         JenkinsRule.WebClient reader = j.createWebClient().login("reader");
         reader.assertFails(job.getUrl() + "export-parameters", HttpURLConnection.HTTP_FORBIDDEN);
+        reader.assertFails(job.getUrl() + "export-parameters/declarative", HttpURLConnection.HTTP_FORBIDDEN);
+        reader.assertFails(job.getUrl() + "export-parameters/scripted", HttpURLConnection.HTTP_FORBIDDEN);
         assertThat(reader.getPage(job).asXml(), not(containsString("export-parameters")));
 
         JenkinsRule.WebClient configurer = j.createWebClient().login("configurer");
@@ -305,6 +352,12 @@ class ExportParamsActionTest {
                 ((GroovyScript) ((CascadeChoiceParameter) property.getParameterDefinition("HOST")).getScript())
                         .getScript()
                         .getScript());
+    }
+
+    private static List<String> texts(DomElement block, String cssClass) {
+        return block.getByXPath(".//span[@class='" + cssClass + "']").stream()
+                .map(span -> ((DomElement) span).getTextContent())
+                .toList();
     }
 
     private FreeStyleProject job(ParameterDefinition... definitions) throws Exception {

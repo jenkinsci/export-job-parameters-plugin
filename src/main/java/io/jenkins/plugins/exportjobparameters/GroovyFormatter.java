@@ -13,7 +13,7 @@ import org.jenkinsci.plugins.workflow.cps.Snippetizer;
  */
 final class GroovyFormatter {
     static final String INDENT = "    ";
-    private static final int MAX_WIDTH = 120;
+    private static final int MAX_WIDTH = 100;
 
     private GroovyFormatter() {}
 
