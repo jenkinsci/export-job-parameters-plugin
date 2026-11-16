@@ -10,6 +10,7 @@ import hudson.model.ParameterDefinition;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.security.Permission;
 import hudson.util.Secret;
+import jakarta.servlet.http.HttpServletResponse;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
@@ -25,6 +26,8 @@ import jenkins.model.TransientActionFactory;
 import org.jenkinsci.plugins.structs.describable.DescribableModel;
 import org.jenkinsci.plugins.structs.describable.DescribableParameter;
 import org.jenkinsci.plugins.structs.describable.UninstantiatedDescribable;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.HttpResponses;
 
 /**
  * Renders the parameters of a job as Pipeline code.
@@ -93,6 +96,28 @@ public class ExportParamsAction implements Action {
             block.append(indent).append(snippet).append(i < last && !isComment(snippet) ? ",\n" : "\n");
         }
         return block.append(INDENT).append("])\n])").toString();
+    }
+
+    /**
+     * Serves the Declarative form as plain text, for scripts that migrate many jobs.
+     */
+    public HttpResponse doDeclarative() { // lgtm[jenkins/csrf] read only
+        job.checkPermission(getPermission());
+        String block = getDeclarativeBlock();
+        if (block == null) {
+            return HttpResponses.error(
+                    HttpServletResponse.SC_NOT_FOUND,
+                    "A parameter of this job has no Pipeline symbol, use the scripted form");
+        }
+        return HttpResponses.text(block + "\n");
+    }
+
+    /**
+     * Serves the Scripted form as plain text, for scripts that migrate many jobs.
+     */
+    public HttpResponse doScripted() { // lgtm[jenkins/csrf] read only
+        job.checkPermission(getPermission());
+        return HttpResponses.text(getScriptedBlock() + "\n");
     }
 
     private static boolean isComment(String snippet) {

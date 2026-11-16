@@ -3,6 +3,7 @@
     <l:layout title="${it.displayName}" permission="${it.permission}">
         <l:header>
             <link rel="stylesheet" href="${resURL}/plugin/export-job-parameters/css/export-parameters.css" type="text/css"/>
+            <script src="${resURL}/plugin/export-job-parameters/js/export-parameters.js" type="text/javascript" defer="true"/>
         </l:header>
         <st:include page="sidepanel.jelly" it="${it.job}"/>
         <l:main-panel>
@@ -15,7 +16,7 @@
                 <h2 class="jenkins-section__title">${%Declarative Pipeline}</h2>
                 <j:choose>
                     <j:when test="${declarative != null}">
-                        <p>${%declarative.help}</p>
+                        <p>${%declarative.help} <a href="declarative">${%Plain text}</a></p>
                         <div class="export-parameters-code">
                             <div class="export-parameters-code__copy">
                                 <l:copyButton text="${declarative}" iconOnly="true"/>
@@ -31,7 +32,7 @@
 
             <section class="jenkins-section">
                 <h2 class="jenkins-section__title">${%Scripted Pipeline}</h2>
-                <p>${%scripted.help}</p>
+                <p>${%scripted.help} <a href="scripted">${%Plain text}</a></p>
                 <div class="export-parameters-code">
                     <div class="export-parameters-code__copy">
                         <l:copyButton text="${scripted}" iconOnly="true"/>
