@@ -63,24 +63,32 @@ class ExportParamsActionTest {
 
         assertEquals("""
                 parameters {
-                    string(defaultValue: 'staging', description: 'Environment to deploy to', name: 'DEPLOY_ENV', trim: true)
-                    choice(choices: ['us-east-1', 'eu-west-1'], description: 'AWS region', name: 'REGION')
-                    booleanParam(defaultValue: true, name: 'DEBUG')
-                    text(defaultValue: '''line1
-                line2''', description: 'Release notes', name: 'NOTES')
+                    string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Environment to deploy to')
+                    choice(name: 'REGION', choices: ['us-east-1', 'eu-west-1'], description: 'AWS region')
+                    booleanParam(name: 'DEBUG', defaultValue: true)
+                    text(
+                        name: 'NOTES',
+                        defaultValue: '''line1
+                line2''',
+                        description: 'Release notes'
+                    )
                     // The default value of TOKEN is a secret and is not exported
-                    password(description: 'API token', name: 'TOKEN')
+                    password(name: 'TOKEN', description: 'API token')
                 }""", action(job).getDeclarativeBlock());
         assertEquals("""
                 properties([
                     parameters([
-                        string(defaultValue: 'staging', description: 'Environment to deploy to', name: 'DEPLOY_ENV', trim: true),
-                        choice(choices: ['us-east-1', 'eu-west-1'], description: 'AWS region', name: 'REGION'),
-                        booleanParam(defaultValue: true, name: 'DEBUG'),
-                        text(defaultValue: '''line1
-                line2''', description: 'Release notes', name: 'NOTES'),
-                        // The default value of TOKEN is a secret and is not exported,
-                        password(description: 'API token', name: 'TOKEN')
+                        string(name: 'DEPLOY_ENV', defaultValue: 'staging', trim: true, description: 'Environment to deploy to'),
+                        choice(name: 'REGION', choices: ['us-east-1', 'eu-west-1'], description: 'AWS region'),
+                        booleanParam(name: 'DEBUG', defaultValue: true),
+                        text(
+                            name: 'NOTES',
+                            defaultValue: '''line1
+                line2''',
+                            description: 'Release notes'
+                        ),
+                        // The default value of TOKEN is a secret and is not exported
+                        password(name: 'TOKEN', description: 'API token')
                     ])
                 ])""", action(job).getScriptedBlock());
     }
@@ -93,23 +101,34 @@ class ExportParamsActionTest {
         assertEquals("""
                 parameters {
                     string(
-                        defaultValue: 'staging',
-                        description: '%s',
                         name: 'DEPLOY_ENV',
-                        trim: true
+                        defaultValue: 'staging',
+                        trim: true,
+                        description: '%s'
                     )
                 }""".formatted(description), action(job).getDeclarativeBlock());
         assertEquals("""
                 properties([
                     parameters([
                         string(
-                            defaultValue: 'staging',
-                            description: '%s',
                             name: 'DEPLOY_ENV',
-                            trim: true
+                            defaultValue: 'staging',
+                            trim: true,
+                            description: '%s'
                         )
                     ])
                 ])""".formatted(description), action(job).getScriptedBlock());
+    }
+
+    @Test
+    void stringsUseTheQuotesThatNeedTheLeastEscaping() {
+        assertEquals("'plain'", GroovyFormatter.quote("plain"));
+        assertEquals("\"it's\"", GroovyFormatter.quote("it's"));
+        assertEquals("'it\\'s \"quoted\"'", GroovyFormatter.quote("it's \"quoted\""));
+        assertEquals("'it\\'s $HOME'", GroovyFormatter.quote("it's $HOME"));
+        assertEquals("'c:\\\\temp'", GroovyFormatter.quote("c:\\temp"));
+        assertEquals("'''it's\nfine'''", GroovyFormatter.quote("it's\nfine"));
+        assertEquals("'''a \\'\\'\\' b\nends with \\''''", GroovyFormatter.quote("a ''' b\nends with '"));
     }
 
     @Test
@@ -146,7 +165,7 @@ class ExportParamsActionTest {
         assertEquals("""
                 properties([
                     parameters([
-                        string(defaultValue: 'a', name: 'A'),
+                        string(name: 'A', defaultValue: 'a'),
                         [$class: 'NoSymbolParameterDefinition', name: 'B', type: 'PT_TAG']
                     ])
                 ])""", action(job).getScriptedBlock());
@@ -170,7 +189,7 @@ class ExportParamsActionTest {
 
         assertThat(
                 action(job).getScriptedBlock(),
-                containsString("[$class: '" + Other.PasswordParameterDefinition.class.getName() + "', name: 'B']"));
+                containsString("$class: '" + Other.PasswordParameterDefinition.class.getName() + "',\n"));
 
         WorkflowJob pipeline = j.createProject(WorkflowJob.class, "scripted");
         pipeline.setDefinition(new CpsFlowDefinition(action(job).getScriptedBlock() + "\necho 'ok'", true));
@@ -183,7 +202,7 @@ class ExportParamsActionTest {
     void parameterThatPipelineCannotInstantiateIsReported() throws Exception {
         FreeStyleProject job = job(new StringParameterDefinition("A", "a"), new UnsupportedParameterDefinition("B"));
 
-        assertThat(action(job).getDeclarativeBlock(), containsString("string(defaultValue: 'a', name: 'A')\n"));
+        assertThat(action(job).getDeclarativeBlock(), containsString("string(name: 'A', defaultValue: 'a')\n"));
         assertThat(
                 action(job).getDeclarativeBlock(),
                 containsString("// B cannot be exported: " + UnsupportedParameterDefinition.class.getName()));
@@ -230,7 +249,7 @@ class ExportParamsActionTest {
         JenkinsRule.WebClient configurer = j.createWebClient().login("configurer");
         assertThat(
                 configurer.getPage(job, "export-parameters").asNormalizedText(),
-                containsString("string(defaultValue: 'value', name: 'NAME')"));
+                containsString("string(name: 'NAME', defaultValue: 'value')"));
     }
 
     private ParameterDefinition[] roundTripParameters() throws Exception {
