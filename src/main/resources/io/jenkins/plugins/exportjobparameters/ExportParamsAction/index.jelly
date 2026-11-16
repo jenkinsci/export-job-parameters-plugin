@@ -1,32 +1,44 @@
 <?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:l="/lib/layout">
     <l:layout title="${it.displayName}" permission="${it.permission}">
+        <l:header>
+            <link rel="stylesheet" href="${resURL}/plugin/export-job-parameters/css/export-parameters.css" type="text/css"/>
+        </l:header>
         <st:include page="sidepanel.jelly" it="${it.job}"/>
         <l:main-panel>
             <l:app-bar title="${it.displayName}"/>
             <j:set var="declarative" value="${it.declarativeBlock}"/>
             <j:set var="scripted" value="${it.scriptedBlock}"/>
+            <p>${%intro}</p>
 
-            <h2>${%Declarative Pipeline}</h2>
-            <j:choose>
-                <j:when test="${declarative != null}">
-                    <p>${%declarative.help}</p>
-                    <div class="jenkins-!-margin-bottom-2">
-                        <l:copyButton text="${declarative}" label="${%Copy}"/>
+            <section class="jenkins-section">
+                <h2 class="jenkins-section__title">${%Declarative Pipeline}</h2>
+                <j:choose>
+                    <j:when test="${declarative != null}">
+                        <p>${%declarative.help}</p>
+                        <div class="export-parameters-code">
+                            <div class="export-parameters-code__copy">
+                                <l:copyButton text="${declarative}" iconOnly="true"/>
+                            </div>
+                            <pre id="export-parameters-declarative">${declarative}</pre>
+                        </div>
+                    </j:when>
+                    <j:otherwise>
+                        <p>${%declarative.unavailable}</p>
+                    </j:otherwise>
+                </j:choose>
+            </section>
+
+            <section class="jenkins-section">
+                <h2 class="jenkins-section__title">${%Scripted Pipeline}</h2>
+                <p>${%scripted.help}</p>
+                <div class="export-parameters-code">
+                    <div class="export-parameters-code__copy">
+                        <l:copyButton text="${scripted}" iconOnly="true"/>
                     </div>
-                    <pre id="export-parameters-declarative">${declarative}</pre>
-                </j:when>
-                <j:otherwise>
-                    <p>${%declarative.unavailable}</p>
-                </j:otherwise>
-            </j:choose>
-
-            <h2>${%Scripted Pipeline}</h2>
-            <p>${%scripted.help}</p>
-            <div class="jenkins-!-margin-bottom-2">
-                <l:copyButton text="${scripted}" label="${%Copy}"/>
-            </div>
-            <pre id="export-parameters-scripted">${scripted}</pre>
+                    <pre id="export-parameters-scripted">${scripted}</pre>
+                </div>
+            </section>
         </l:main-panel>
     </l:layout>
 </j:jelly>

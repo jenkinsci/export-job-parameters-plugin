@@ -1,0 +1,16 @@
+.export-parameters-code {
+  position: relative;
+}
+
+.export-parameters-code pre {
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.export-parameters-code__copy {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  border-radius: 10px;
+  background: var(--background);
+}

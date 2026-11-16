@@ -14,15 +14,17 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import jenkins.model.TransientActionFactory;
 import org.jenkinsci.plugins.structs.describable.DescribableModel;
+import org.jenkinsci.plugins.structs.describable.DescribableParameter;
 import org.jenkinsci.plugins.structs.describable.UninstantiatedDescribable;
-import org.jenkinsci.plugins.workflow.cps.Snippetizer;
 
 /**
  * Renders the parameters of a job as Pipeline code.
@@ -30,8 +32,7 @@ import org.jenkinsci.plugins.workflow.cps.Snippetizer;
 public class ExportParamsAction implements Action {
     private static final Logger LOGGER = Logger.getLogger(ExportParamsAction.class.getName());
 
-    private static final String INDENT = "    ";
-    private static final int MAX_LINE_LENGTH = 120;
+    private static final String INDENT = GroovyFormatter.INDENT;
 
     private final Job<?, ?> job;
 
@@ -81,8 +82,21 @@ public class ExportParamsAction implements Action {
     @NonNull
     public String getScriptedBlock() {
         String indent = INDENT + INDENT;
-        return "properties([\n" + INDENT + "parameters([\n" + indent + String.join(",\n" + indent, snippets(indent))
-                + "\n" + INDENT + "])\n])";
+        List<String> snippets = snippets(indent);
+        int last = snippets.size() - 1;
+        while (last >= 0 && isComment(snippets.get(last))) {
+            last--;
+        }
+        StringBuilder block = new StringBuilder("properties([\n" + INDENT + "parameters([\n");
+        for (int i = 0; i < snippets.size(); i++) {
+            String snippet = snippets.get(i);
+            block.append(indent).append(snippet).append(i < last && !isComment(snippet) ? ",\n" : "\n");
+        }
+        return block.append(INDENT).append("])\n])").toString();
+    }
+
+    private static boolean isComment(String snippet) {
+        return snippet.startsWith("//");
     }
 
     private List<String> snippets(String indent) {
@@ -108,7 +122,12 @@ public class ExportParamsAction implements Action {
                             "// The default value of " + definition.getName() + " is a secret and is not exported");
                 }
                 arguments.values().removeIf(Secret.class::isInstance);
-                snippets.add(toGroovy(ud, indent));
+                // What Pipeline assumes anyway when the argument is missing
+                arguments.values().removeIf(Objects::isNull);
+                if (arguments.get("description") instanceof String description && description.isBlank()) {
+                    arguments.remove("description");
+                }
+                snippets.add(GroovyFormatter.format(inDeclarationOrder(ud, true), indent));
             } catch (RuntimeException e) {
                 LOGGER.log(
                         Level.WARNING,
@@ -122,21 +141,34 @@ public class ExportParamsAction implements Action {
     }
 
     /**
-     * Writes a value on one line if it is short, otherwise with one argument per line.
+     * structs sorts the arguments by name. Put them back in the order the parameter type declares them, which starts
+     * with the name, and put the description of the parameter last as the Pipeline documentation does.
      */
-    private static String toGroovy(Object value, String indent) {
-        String oneLine = Snippetizer.object2Groovy(value, true);
-        if (oneLine.length() <= MAX_LINE_LENGTH
-                || !(value instanceof UninstantiatedDescribable ud)
-                || ud.getArguments().size() < 2) {
-            return oneLine;
+    private static Object inDeclarationOrder(Object value, boolean parameter) {
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .map(e -> inDeclarationOrder(e, false))
+                    .collect(Collectors.toCollection(ArrayList::new));
         }
-        boolean call = !oneLine.startsWith("[");
-        String arguments = (call ? ud.getArguments() : ud.toShallowMap())
-                .entrySet().stream()
-                        .map(e -> indent + INDENT + e.getKey() + ": " + toGroovy(e.getValue(), indent + INDENT))
-                        .collect(Collectors.joining(",\n"));
-        return (call ? ud.getSymbol() + "(" : "[") + "\n" + arguments + "\n" + indent + (call ? ")" : "]");
+        if (!(value instanceof UninstantiatedDescribable ud)) {
+            return value;
+        }
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        DescribableModel<?> model = ud.getModel();
+        if (model != null) {
+            for (DescribableParameter declared : model.getParameters()) {
+                if (ud.getArguments().containsKey(declared.getName())) {
+                    arguments.put(declared.getName(), null);
+                }
+            }
+        }
+        ud.getArguments().forEach((name, argument) -> arguments.put(name, inDeclarationOrder(argument, false)));
+        if (parameter && arguments.containsKey("description")) {
+            arguments.put("description", arguments.remove("description"));
+        }
+        UninstantiatedDescribable ordered = new UninstantiatedDescribable(ud.getSymbol(), ud.getKlass(), arguments);
+        ordered.setModel(model);
+        return ordered;
     }
 
     /**
